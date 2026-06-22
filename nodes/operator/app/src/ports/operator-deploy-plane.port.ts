@@ -110,13 +110,14 @@ export interface SyncTemplateUpstreamInput {
   /** Fork base branch the upstream merges into, e.g. `main`. */
   readonly forkBranch: string;
   /**
-   * Tier-3 (node identity / presentation) globs to carve OUT of the upstream merge — the fork's own
-   * version of these paths is restored before the PR opens, so node-template's starter
-   * presentation/branding/identity never overwrites a fork's. Declared in node-template's
-   * `.cogni/sync-manifest.yaml#node_local` (TIER3_IS_DATA); the caller resolves it and passes it here.
-   * Empty/omitted ⇒ no carve-out (legacy whole-repo merge behavior).
+   * The FOUNDATION (Tier 1 + Tier 2) allowlist — the platform substrate node-template owns and syncs.
+   * Everything NOT matched here is Tier 3 (node-local, the COMPLEMENT, sovereign-by-default) and is
+   * restored to the fork's own version before the PR opens, so node-template's presentation/product
+   * never overwrites a fork's. Declared in node-template's `.cogni/sync-manifest.yaml#foundation`
+   * (FOUNDATION_IS_ENUMERATED); the caller resolves it and passes it here.
+   * Empty/omitted ⇒ everything is node-local ⇒ the upstream PR carries no change (fail-closed).
    */
-  readonly nodeLocalPaths?: readonly string[];
+  readonly foundationPaths?: readonly string[];
 }
 
 export type SyncTemplateUpstreamResult =
@@ -163,11 +164,12 @@ export interface OperatorDeployPlanePort {
    * separate the fork from upstream. Distinct from `syncCanonicalFilesToFork` (Tier 1): that surgically
    * overwrites the flight-contract files so a CI fix lands cleanly even when this merge conflicts.
    *
-   * THREE_TIER_CARVE_OUT (spec.repo-sync-contract): `nodeLocalPaths` (Tier 3 — node identity /
-   * presentation) are restored to the FORK's version before the PR opens, so the upstream PR carries
-   * only Tier-2 substrate (`build their mission, not their plumbing`). With Tier 3 out of the diff the
-   * merge stops conflicting on node-local UI/branding/identity, so Tier 1 + Tier 2 are always
-   * auto-mergeable. node-template is a starter only — its presentation never overwrites a fork's.
+   * FOUNDATION_ALLOWLIST_CARVE_OUT (spec.repo-sync-contract): the merge carries only the `foundationPaths`
+   * allowlist (Tier 1 + Tier 2 — the enumerated platform substrate). Every other path is Tier 3 (the
+   * COMPLEMENT, sovereign-by-default) and is restored to the FORK's version before the PR opens, so the
+   * upstream PR carries only foundation substrate (`build their mission, not their plumbing`). With Tier 3
+   * (everything non-foundation) out of the diff the merge stops conflicting on node-local UI/branding/
+   * identity/product, so Tier 1 + Tier 2 are always auto-mergeable. node-template is a starter only.
    */
   syncTemplateUpstreamToFork(
     input: SyncTemplateUpstreamInput
@@ -193,13 +195,14 @@ export interface OperatorDeployPlanePort {
   ): Promise<MirrorCanonicalFilesResult>;
 
   /**
-   * Resolve the Tier-3 (node identity / presentation) globs from the template repo's
-   * `.cogni/sync-manifest.yaml#node_local` at `sourceRef` (TIER3_IS_DATA — declared in node-template,
-   * read at runtime). Falls back to the hardcoded default floor when the manifest is missing or carries
-   * no `node_local:` block, so the carve-out is always at least the obvious presentation surface.
-   * The facade resolves this once per sync and threads it into every fork's Tier-2 merge.
+   * Resolve the FOUNDATION (Tier 1 + Tier 2) allowlist from the template repo's
+   * `.cogni/sync-manifest.yaml#foundation` at `sourceRef` (FOUNDATION_IS_ENUMERATED — declared in
+   * node-template, read at runtime). Falls back to the hardcoded default floor when the manifest is
+   * missing or carries no `foundation:` block, so the merge always carries at least the obvious
+   * platform substrate. The facade resolves this once per sync and threads it into every fork's Tier-2
+   * merge; everything NOT in this set is Tier 3 (node-local, the complement, restored to the fork).
    */
-  resolveNodeLocalPaths(input: {
+  resolveFoundationPaths(input: {
     readonly sourceOwner: string;
     readonly sourceRepo: string;
     readonly sourceRef: string;

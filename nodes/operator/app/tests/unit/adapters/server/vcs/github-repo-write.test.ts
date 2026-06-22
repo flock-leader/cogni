@@ -1497,7 +1497,7 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
     expect(result).toEqual({ status: "up_to_date" });
   });
 
-  it("Tier-3 carve-out: restores the fork's node-local paths + deletes upstream-only ones, then points the branch at the carved commit", async () => {
+  it("Tier-3 carve-out (complement of foundation): restores the fork's node-local paths + deletes upstream-only ones, leaves foundation substrate, then points the branch at the carved commit", async () => {
     const FORK_TREE = "fork-tree";
     const UPSTREAM_TREE = "upstream-tree";
     const CARVED_COMMIT = "carved-commit-sha";
@@ -1597,12 +1597,15 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
 
     const result = await makeWriter().syncTemplateUpstreamToFork({
       ...upstreamInput(),
-      nodeLocalPaths: ["app/src/app/(public)/**", ".cogni/repo-spec.yaml"],
+      // FOUNDATION allowlist = packages/** only. Everything else (home, repo-spec, about) is the
+      // COMPLEMENT (Tier 3, node-local) and gets carved out / restored to the fork.
+      foundationPaths: ["packages/**"],
     });
 
     expect(result).toMatchObject({ status: "pr_opened", prNumber: 5 });
 
-    // home + repo-spec restored to FORK blobs; the upstream-only about page deleted; substrate untouched.
+    // home + repo-spec (non-foundation) restored to FORK blobs; the upstream-only about page (also
+    // non-foundation) deleted; the packages/** foundation substrate untouched.
     expect(treeEntries).toEqual(
       expect.arrayContaining([
         {
@@ -1670,7 +1673,8 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
 
     const result = await makeWriter().syncTemplateUpstreamToFork({
       ...upstreamInput(),
-      nodeLocalPaths: ["app/src/app/(public)/**"],
+      // The only divergent path is node-local (not in foundation) AND identical on both sides → no carve.
+      foundationPaths: ["packages/**"],
     });
 
     expect(result).toMatchObject({ status: "pr_opened", prNumber: 6 });
@@ -1680,10 +1684,10 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
   });
 });
 
-describe("GitHubRepoWriter.resolveNodeLocalPaths", () => {
+describe("GitHubRepoWriter.resolveFoundationPaths", () => {
   const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64");
 
-  it("reads node_local globs from the template's sync-manifest at sourceRef", async () => {
+  it("reads the foundation allowlist from the template's sync-manifest at sourceRef", async () => {
     routeHandlers = {
       "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
         expect(params).toMatchObject({
@@ -1696,21 +1700,21 @@ describe("GitHubRepoWriter.resolveNodeLocalPaths", () => {
           type: "file",
           encoding: "base64",
           content: b64(`schema: 2
-node_local:
-  - "app/src/app/(public)/**"
-  - ".cogni/repo-spec.yaml"
+foundation:
+  - "app/src/app/api/**"
+  - "packages/**"
 `),
         };
       },
     };
 
     await expect(
-      makeWriter().resolveNodeLocalPaths({
+      makeWriter().resolveFoundationPaths({
         sourceOwner: "Cogni-DAO",
         sourceRepo: "node-template",
         sourceRef: "feedsha",
       })
-    ).resolves.toEqual(["app/src/app/(public)/**", ".cogni/repo-spec.yaml"]);
+    ).resolves.toEqual(["app/src/app/api/**", "packages/**"]);
   });
 
   it("falls back to the default floor when the manifest is absent (404)", async () => {
@@ -1720,13 +1724,15 @@ node_local:
       },
     };
 
-    const result = await makeWriter().resolveNodeLocalPaths({
+    const result = await makeWriter().resolveFoundationPaths({
       sourceOwner: "Cogni-DAO",
       sourceRepo: "node-template",
       sourceRef: "feedsha",
     });
-    // Default floor is non-empty and includes the public route + repo-spec.
-    expect(result).toContain("app/src/app/(public)/**");
-    expect(result).toContain(".cogni/repo-spec.yaml");
+    // Default floor is the platform substrate (NOT presentation/identity — that's the complement).
+    expect(result).toContain("app/src/app/api/**");
+    expect(result).toContain("packages/**");
+    expect(result).not.toContain("app/src/app/(public)/**");
+    expect(result).not.toContain(".cogni/repo-spec.yaml");
   });
 });

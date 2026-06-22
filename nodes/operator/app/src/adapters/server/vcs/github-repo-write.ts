@@ -59,7 +59,7 @@ import {
 import type { NodeKnowledgeRemote } from "@/shared/node-app-scaffold/knowledge-remote";
 import {
   makeNodeLocalMatcher,
-  parseNodeLocalPaths,
+  parseFoundationPaths,
 } from "@/shared/node-app-scaffold/node-local-paths";
 
 export interface GitHubRepoWriterConfig {
@@ -697,7 +697,7 @@ export class GitHubRepoWriter implements OperatorDeployPlanePort {
     return { status: "pr_opened", branch, prNumber, prUrl, changedPaths };
   }
 
-  async resolveNodeLocalPaths(input: {
+  async resolveFoundationPaths(input: {
     sourceOwner: string;
     sourceRepo: string;
     sourceRef: string;
@@ -708,7 +708,7 @@ export class GitHubRepoWriter implements OperatorDeployPlanePort {
       path: ".cogni/sync-manifest.yaml",
       ref: input.sourceRef,
     });
-    return parseNodeLocalPaths(manifest);
+    return parseFoundationPaths(manifest);
   }
 
   async listCatalogForkTargets(input: {
@@ -762,7 +762,7 @@ export class GitHubRepoWriter implements OperatorDeployPlanePort {
       forkOwner,
       forkRepo,
       forkBranch,
-      nodeLocalPaths,
+      foundationPaths,
     } = input;
     // Same-org cross-fork PRs can't disambiguate by `owner:branch` (template + fork share an owner →
     // GitHub resolves head to the base repo → false "up to date"). Instead materialize the upstream
@@ -772,17 +772,18 @@ export class GitHubRepoWriter implements OperatorDeployPlanePort {
     // Same-org cross-fork PRs can't disambiguate by `owner:branch`, so materialize the upstream commit
     // as a branch IN the fork (reachable via the shared fork network) + a SAME-repo PR head→base.
     const octokit = await this.getOctokit(forkOwner, forkRepo);
-    // Tier-3 carve-out: rewrite the upstream tip so node-local (identity/presentation) paths match the
-    // FORK's main, then point the branch at that commit. The PR diff then carries Tier-2 substrate only,
-    // so node-template's starter presentation never lands and the merge stops conflicting on node-local
-    // UI/branding (THREE_TIER_CARVE_OUT, spec.repo-sync-contract). Empty list ⇒ legacy whole-repo merge.
+    // Tier-3 carve-out: rewrite the upstream tip so every path NOT in the FOUNDATION allowlist (Tier 3,
+    // sovereign-by-default = the COMPLEMENT) matches the FORK's main, then point the branch at that
+    // commit. The PR diff then carries foundation substrate only, so node-template's presentation/product
+    // never lands and the merge stops conflicting on node-local code (TIER3_IS_THE_COMPLEMENT,
+    // spec.repo-sync-contract). Empty foundation ⇒ everything is node-local ⇒ no upstream change lands.
     const branchSha = await this.carveOutNodeLocalPaths(
       octokit,
       forkOwner,
       forkRepo,
       forkBranch,
       templateSha,
-      nodeLocalPaths ?? []
+      foundationPaths ?? []
     );
     await this.upsertRef(
       octokit,
@@ -1221,14 +1222,17 @@ export class GitHubRepoWriter implements OperatorDeployPlanePort {
   }
 
   /**
-   * Tier-3 carve-out. Build a commit atop `templateSha` whose node-local (identity/presentation) paths
-   * are restored to the FORK's `forkBranch` version, returning that commit SHA (or `templateSha`
-   * unchanged when nothing diverges / no globs declared). The upstream branch then points here, so a
-   * SAME-repo PR head=branch → base=forkBranch shows only Tier-2 substrate deltas — node-template's
-   * starter presentation is never in the diff. Uses recursive trees on both sides:
+   * Tier-3 carve-out. Build a commit atop `templateSha` whose node-local paths — the COMPLEMENT of the
+   * FOUNDATION allowlist (`!isFoundation`), i.e. everything sovereign-by-default — are restored to the
+   * FORK's `forkBranch` version, returning that commit SHA (or `templateSha` unchanged when nothing
+   * diverges). The upstream branch then points here, so a SAME-repo PR head=branch → base=forkBranch
+   * shows only foundation-substrate deltas — node-template's presentation/product is never in the diff.
+   * Uses recursive trees on both sides:
    *   - a node-local path present on the fork → override the upstream blob with the fork's blob;
    *   - a node-local path that exists on upstream but NOT the fork → delete it from the branch tip
-   *     (so an upstream-introduced presentation file can't ride in).
+   *     (so an upstream-introduced sovereign/presentation file can't ride in).
+   * `foundationPaths` empty ⇒ everything is node-local ⇒ the upstream PR carries no change (fail-closed:
+   * an undeclared foundation must never widen to clobber the fork — only the operator can under-claim).
    * @returns the carved commit SHA, or `templateSha` if there is nothing to carve.
    */
   private async carveOutNodeLocalPaths(
@@ -1237,10 +1241,9 @@ export class GitHubRepoWriter implements OperatorDeployPlanePort {
     repo: string,
     forkBranch: string,
     templateSha: string,
-    nodeLocalPaths: readonly string[]
+    foundationPaths: readonly string[]
   ): Promise<string> {
-    if (nodeLocalPaths.length === 0) return templateSha;
-    const isNodeLocal = makeNodeLocalMatcher(nodeLocalPaths);
+    const isNodeLocal = makeNodeLocalMatcher(foundationPaths);
 
     // Fork main tip → its tree (the source of restored blobs); upstream tip → its tree (the base we edit).
     const forkBlobs = await this.listTreeBlobs(

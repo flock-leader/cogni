@@ -72,16 +72,16 @@ node-template merge → main
     → dispatchCanonicalForkSync  (src/app/_facades/deploy/canonical-fork-sync.server.ts)
       → targets = infra/catalog/*.yaml source_repo rows in the parent monorepo
         (NODE_SUBMODULE_PARENT_{OWNER,REPO}); node-template + operator EXCLUDED
-      → resolveNodeLocalPaths (reads node-template's .cogni/sync-manifest.yaml#node_local — Tier 3)
+      → resolveFoundationPaths (reads node-template's .cogni/sync-manifest.yaml#foundation — Tier 1+2)
       → per fork, decoupled tiers (per-tier, per-fork error isolation):
           Tier 1  syncCanonicalFilesToFork    → byte-overwrite CI/contract files
-          Tier 2  syncTemplateUpstreamToFork  → MERGE substrate upstream, Tier-3 CARVED OUT
-          Tier 3  (node_local globs)          → NEVER synced — restored to the fork's own version
+          Tier 2  syncTemplateUpstreamToFork  → MERGE foundation upstream, Tier-3 (complement) CARVED OUT
+          Tier 3  (everything NOT in foundation) → NEVER synced — restored to the fork's own version
 ```
 
 - **One living PR per syncing tier per fork.** SHA-free branches force-updated each release (Dependabot pattern): Tier 1 `cogni-operator/node-template-sync`, Tier 2 `cogni-operator/node-template-upstream`. Tier 3 opens no PR — it is the carve-out _inside_ Tier 2.
-- **Tier 1 paths** (`CI_CONTRACT_PATHS`): `.github/workflows/{ci.yaml,pr-build.yml,pr-lint.yaml}`, `scripts/check-node-ci-workflow.mjs`. Add a path only if identical across all forks.
-- **Tier 3 paths** (`node_local` in node-template's `.cogni/sync-manifest.yaml`): node identity/presentation — homepage, landing UI, branding/theme, `.cogni/repo-spec.yaml`, persona. These are restored to the FORK's version inside the Tier-2 merge so they're never overwritten; carving them out is what makes Tier 1 + Tier 2 always auto-mergeable. Default floor: `nodes/operator/app/src/shared/node-app-scaffold/node-local-paths.ts`.
+- **The SSOT is the FOUNDATION allowlist** (`foundation` in node-template's `.cogni/sync-manifest.yaml`) — Tier 1 (flight contract) + Tier 2 (platform substrate: `app/src/app/api/**`, `app/src/shared/**`, `app/src/bootstrap/**`, `graphs/**`, `packages/**`, base k8s). A node-template PR that GROWS the shared substrate adds the path here in the same PR. Default floor: `DEFAULT_FOUNDATION_PATHS` in `nodes/operator/app/src/shared/node-app-scaffold/node-local-paths.ts`.
+- **Tier 3 is the COMPLEMENT** (`allChangedFiles − foundation`), NOT enumerated: node identity/presentation/product — homepage, landing UI, branding/theme, `.cogni/repo-spec.yaml`, persona, and anything else the fork owns. Restored to the FORK's version inside the Tier-2 merge so it's never overwritten; carving it out is what makes Tier 1 + Tier 2 always auto-mergeable. **Why this polarity:** missing a foundation path is non-destructive (the fork misses a substrate update — staleness, drift-detectable); enumerating Tier 3 instead would let a missed entry silently clobber a fork's sovereign code. Sovereign-by-default; the foundation is the allowlist.
 - **Targets from `infra/catalog`**, not the nodes table or the node registry (the registry resolves to the parent monorepo / hub).
 
 ### Why operator can't be auto-synced

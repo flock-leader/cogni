@@ -4,7 +4,8 @@
 /**
  * Module: `@cogni/tests/unit/app/_facades/deploy/canonical-fork-sync`
  * Purpose: Unit-prove the push guard + the three-tier fan-out (CI overwrite + substrate merge with the
- *   Tier-3 carve-out threaded in), incl. per-tier per-fork error isolation.
+ *   FOUNDATION allowlist threaded in; Tier 3 = the complement, carved out), incl. per-tier per-fork
+ *   error isolation.
  * Scope: Pure `extractTemplateMainPush` + `fanOutForkSync` with a fake deploy plane. No GitHub/DB.
  * Links: src/app/_facades/deploy/canonical-fork-sync.server.ts
  * @internal
@@ -86,7 +87,7 @@ const TARGETS: ForkSyncTarget[] = [
   { owner: "cogni-test-org", name: "oss", slug: "oss" },
 ];
 
-const NODE_LOCAL = ["app/src/app/(public)/**", ".cogni/repo-spec.yaml"];
+const FOUNDATION = ["app/src/app/api/**", "packages/**"];
 
 function fakePlane(over: {
   ci?: (repo: string) => Promise<MirrorCanonicalFilesResult>;
@@ -108,7 +109,7 @@ function fakePlane(over: {
 }
 
 describe("fanOutForkSync — three tiers, per-tier per-fork isolation", () => {
-  it("records both PR-opening tiers per fork and threads Tier-3 globs into the merge", async () => {
+  it("records both PR-opening tiers per fork and threads the FOUNDATION allowlist into the merge", async () => {
     const plane = fakePlane({
       ci: async (repo) => ({
         status: "pr_opened",
@@ -123,15 +124,16 @@ describe("fanOutForkSync — three tiers, per-tier per-fork isolation", () => {
         prUrl: `https://github.com/cogni-test-org/${i.forkRepo}/pull/2`,
       }),
     });
-    const entries = await fanOutForkSync(plane, CTX, TARGETS, NODE_LOCAL);
+    const entries = await fanOutForkSync(plane, CTX, TARGETS, FOUNDATION);
     expect(entries).toHaveLength(2);
     expect(entries.every((e) => e.ci === "pr_opened")).toBe(true);
     expect(entries.every((e) => e.template === "pr_opened")).toBe(true);
     expect(entries[0]?.ciPrUrl).toContain("/pull/1");
     expect(entries[0]?.templatePrUrl).toContain("/pull/2");
-    // Tier 3 is DATA: the resolved node-local globs flow into every fork's Tier-2 merge.
+    // FOUNDATION is the SSOT: the resolved foundation allowlist flows into every fork's Tier-2 merge
+    // (Tier 3 = the complement, restored to the fork).
     expect(plane.syncTemplateUpstreamToFork).toHaveBeenCalledWith(
-      expect.objectContaining({ nodeLocalPaths: NODE_LOCAL })
+      expect.objectContaining({ foundationPaths: FOUNDATION })
     );
   });
 
@@ -147,7 +149,7 @@ describe("fanOutForkSync — three tiers, per-tier per-fork isolation", () => {
         return { status: "pr_opened", prNumber: 9, prUrl: "u" };
       },
     });
-    const entries = await fanOutForkSync(plane, CTX, TARGETS, NODE_LOCAL);
+    const entries = await fanOutForkSync(plane, CTX, TARGETS, FOUNDATION);
     const blue = entries.find((e) => e.target.endsWith("/blue"));
     const oss = entries.find((e) => e.target.endsWith("/oss"));
     // blue: Tier 1 failed but Tier 2 still ran and opened.
@@ -166,7 +168,7 @@ describe("fanOutForkSync — three tiers, per-tier per-fork isolation", () => {
       plane,
       CTX,
       [TARGETS[0] as ForkSyncTarget],
-      NODE_LOCAL
+      FOUNDATION
     );
     expect(entries[0]?.template).toBe("up_to_date");
     expect(entries[0]?.templatePrUrl).toBeUndefined();

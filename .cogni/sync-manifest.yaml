@@ -30,22 +30,37 @@ exclude:
   - ".local-auth/**"
   - "**/*.tsbuildinfo"
 
-# Tier 3 — node identity / presentation (spec.repo-sync-contract). These globs are the node's FACE:
-# homepage, landing UI, branding/theme/assets, repo-spec identity, persona. node-template is a STARTER
-# only, so on a node-template→fork sync these paths are carved OUT of the Tier-2 substrate merge and
-# RESTORED to the fork's own version — never overwritten ("build their mission, not their plumbing").
-# This is a DIFFERENT axis from divergences[] below (hub↔artifact drift). The operator fork-sync reads
-# node-template's copy of THIS list at runtime (TIER3_IS_DATA); a node-template PR adding a new
-# presentation dir declares it here in the same PR. Default floor lives in
+# FOUNDATION — Tier 1 + Tier 2 (spec.repo-sync-contract § Three-Tier Fork Sync). This is the POSITIVE
+# allowlist of the platform substrate node-template owns and syncs into every fork: the flight contract
+# (Tier 1, force-overwritten) + the foundational app/runtime/library substrate (Tier 2, three-way merged).
+# It is the SSOT for "what is foundation"; Tier 3 (node identity / presentation / product — the node's
+# FACE and its mission) is the COMPLEMENT: everything NOT listed here. On a node-template→fork sync, the
+# complement is carved OUT of the merge and RESTORED to the fork's own version — never overwritten
+# ("build their mission, not their plumbing"). Sovereignty is the DEFAULT; the foundation is the allowlist.
+#
+# Failure-mode asymmetry decides this polarity: MISSING a path here is NON-destructive (the fork just
+# misses a substrate update — staleness, drift-detectable), so err toward UNDER-claiming. The inverse
+# (enumerating Tier 3) would mean a missed entry SILENTLY CLOBBERS a fork's sovereign code — destructive.
+#
+# This is a DIFFERENT axis from divergences[] below (hub↔artifact MIRROR drift, consumed by the
+# drift-detector). `foundation` is the node-template→fork allowlist (consumed by the operator fork-sync
+# at runtime). They are co-located in this one file but never share semantics — different relationships,
+# opposite default polarities. The operator fork-sync reads node-template's copy of THIS list at runtime
+# (FOUNDATION_IS_ENUMERATED); a node-template PR that GROWS the shared substrate adds the path here in the
+# same PR. Default floor lives in
 # nodes/operator/app/src/shared/node-app-scaffold/node-local-paths.ts (used when this block is absent).
-node_local:
-  - "app/src/app/(public)/**" # public-facing pages (homepage, landing, marketing)
-  - "app/src/features/home/**" # home/landing feature surface
-  - "app/src/styles/branding/**" # branding tokens / theme
-  - "app/src/app/branding/**"
-  - "public/branding/**" # static brand assets
-  - ".cogni/repo-spec.yaml" # node identity
-  - ".cogni/persona/**" # persona / character
+foundation:
+  # Tier 1 — flight contract (force-overwritten by syncCanonicalFilesToFork).
+  - ".github/workflows/ci.yaml"
+  - ".github/workflows/pr-build.yml"
+  - ".github/workflows/pr-lint.yaml"
+  - "scripts/check-node-ci-workflow.mjs"
+  # Tier 2 — foundational substrate (three-way merge).
+  - "app/src/app/api/**" # cognition/runtime API surface (the platform seam)
+  - "app/src/shared/**" # shared application substrate (env, logging, ports wiring)
+  - "app/src/bootstrap/**" # bootstrap / capability composition root
+  - "graphs/**" # agent graph runtime the platform ships
+  - "packages/**" # workspace libraries (knowledge-base/-store, db-schema, repo-spec, …)
 
 # Per-artifact divergences. Two shapes:
 #   omit_from_artifact: paths the hub has that the artifact intentionally lacks.
