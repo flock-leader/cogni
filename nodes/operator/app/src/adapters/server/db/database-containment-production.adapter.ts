@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 import type { Logger } from "pino";
 import postgres, { type Sql } from "postgres";
@@ -90,7 +90,7 @@ export class PinoLokiDatabaseContainmentAuditAdapter {
   }): Promise<DatabaseContainmentAuditEvent | null> {
     const nowNs = BigInt(Date.now()) * 1_000_000n;
     const rows = await this.loki.queryRange({
-      query: `{env="${escapeLogQl(this.lokiEnvironment)}",service="operator"} | json | event="database_containment_transition" | nodeId="${escapeLogQl(input.nodeId)}" | environment="${escapeLogQl(input.environment)}"`,
+      query: `{env="${escapeLogQl(this.lokiEnvironment)}",service=~"operator|database-reliability-actuator"} | json | event="database_containment_transition" | nodeId="${escapeLogQl(input.nodeId)}" | environment="${escapeLogQl(input.environment)}"`,
       startNs: String(nowNs - 30n * 24n * 60n * 60n * 1_000_000_000n),
       endNs: String(nowNs),
       limit: 1,
