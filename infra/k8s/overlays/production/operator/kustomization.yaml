@@ -33,6 +33,9 @@ resources:
   # LOKI_LEASE_PUSH_* (CI-derived bootstrap, #2393) before the mount, and kubelet retries
   # converge any race.
   - ../../../base/lease-log-pump
+  # task.5247 — private autonomous database containment/status controller.
+  - ../../../base/database-reliability-actuator
+  - ./database-reliability-actuator-external-secret.yaml
 
 namePrefix: operator-
 
@@ -41,6 +44,7 @@ namePrefix: operator-
 # ../../../base/akash-tx-actuator-service-name for why the prefix is what gives.
 transformers:
   - ../../../base/akash-tx-actuator-service-name
+  - ../../../base/database-reliability-actuator-service-name
 
 replacements:
   - source:
@@ -57,6 +61,46 @@ images:
     newTag: "prod-placeholder-operator"
 
 patches:
+  - target:
+      kind: Deployment
+      name: database-reliability-actuator
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: database-reliability-actuator
+      spec:
+        template:
+          spec:
+            containers:
+              - name: actuator
+                env:
+                  - name: DEPLOY_ENVIRONMENT
+                    value: production
+                  - name: FORK_DOMAIN_ROOT
+                    value: cognidao.org
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: node-app
+      spec:
+        template:
+          spec:
+            containers:
+              - name: app
+                env:
+                  - name: DATABASE_RELIABILITY_ACTUATOR_URL
+                    value: http://database-reliability-actuator:8080
+                  - name: DATABASE_RELIABILITY_STATUS_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: database-reliability-status-client
+                        key: DATABASE_RELIABILITY_STATUS_TOKEN
+                        optional: true
   # bug.5240 — same BY-NAME env rule as the actuator patch below.
   - target:
       kind: Deployment

@@ -96,7 +96,8 @@ declare -ga SCHEDULER_WORKER_KEYS=(
 # Drift against the TS constant is asserted by tests/ci-invariants/akash-tx-actuator-runtime.spec.ts.
 # shellcheck disable=SC2034  # consumed by the sourcing script (scripts/ci/secret-materialize.sh)
 declare -ga PLATFORM_SERVICES=(
-  akash-tx-actuator   # private Akash transaction actuator wallet + bearer token (task.5102)
+  akash-tx-actuator
+  database-reliability-actuator
 )
 
 # Compose-tier secrets — bootstrap postgres/temporal directly via runtime/.env,

@@ -52,6 +52,7 @@ export const PLATFORM_SERVICE_OWNER_NODE = "operator";
  */
 export const PLATFORM_SERVICES: ReadonlySet<string> = new Set<string>([
   "akash-tx-actuator",
+  "database-reliability-actuator",
 ]);
 
 /** Is `service` a declared platform-service bucket an owner-node caller may target? */
@@ -89,6 +90,13 @@ export const PLATFORM_SERVICE_OWNED_KEYS: ReadonlyMap<string, string> = new Map<
 >([
   ["AKASH_ACTUATOR_CONSOLE_API_KEY", "akash-tx-actuator"],
   ["AKASH_TX_ACTUATOR_TOKEN", "akash-tx-actuator"],
+  ["DATABASE_RELIABILITY_ADMIN_URL", "database-reliability-actuator"],
+  ["DATABASE_RELIABILITY_STATUS_TOKEN", "database-reliability-actuator"],
+  [
+    "DATABASE_RELIABILITY_CHERRY_BINDINGS_JSON",
+    "database-reliability-actuator",
+  ],
+  ["DATABASE_RELIABILITY_CHERRY_AUTH_TOKEN", "database-reliability-actuator"],
 ]);
 
 /**

@@ -15,6 +15,9 @@ resources:
   # ledgers. Preview lands no ComputeWorkload CRs; operator akash e2e is
   # validated on candidate-a. See story.5016 / akash-actuator-wallet-cutover.
   - external-secret.yaml
+  # task.5247 — private autonomous database containment/status controller.
+  - ../../../base/database-reliability-actuator
+  - ./database-reliability-actuator-external-secret.yaml
   - ./secrets-writer-sa.yaml
   - ./compute-workload-platform-application.yaml
 
@@ -22,6 +25,8 @@ namePrefix: operator-
 
 # No akash-tx-actuator-service-name transformer here: with the actuator base
 # removed (see resources note above), there is no actuator Service to un-prefix.
+transformers:
+  - ../../../base/database-reliability-actuator-service-name
 
 replacements:
   - source:
@@ -38,6 +43,46 @@ images:
     digest: "sha256:be5e99490e9356f70c6af4b38b62cfbd9775f46047202e8c96ead10de35bd1a0"
 
 patches:
+  - target:
+      kind: Deployment
+      name: database-reliability-actuator
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: database-reliability-actuator
+      spec:
+        template:
+          spec:
+            containers:
+              - name: actuator
+                env:
+                  - name: DEPLOY_ENVIRONMENT
+                    value: preview
+                  - name: FORK_DOMAIN_ROOT
+                    value: cogni-testing.org
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        name: node-app
+      spec:
+        template:
+          spec:
+            containers:
+              - name: app
+                env:
+                  - name: DATABASE_RELIABILITY_ACTUATOR_URL
+                    value: http://database-reliability-actuator:8080
+                  - name: DATABASE_RELIABILITY_STATUS_TOKEN
+                    valueFrom:
+                      secretKeyRef:
+                        name: database-reliability-status-client
+                        key: DATABASE_RELIABILITY_STATUS_TOKEN
+                        optional: true
   # No akash-tx-actuator Deployment patch here: preview runs no akash writer
   # (see resources note above — one active writer per shared test wallet).
   # Node-specific ConfigMap values.
