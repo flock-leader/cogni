@@ -195,6 +195,7 @@ import type {
   ComputeCostReport,
   ComputeCostStorePort,
   ConnectionBrokerPort,
+  DatabaseContainmentPort,
   DatabasePlacementResolverPort,
   DataSourceRegistration,
   EpochsRead,
@@ -278,6 +279,8 @@ export interface Container {
   /** Fail-closed guard for live payment rail activation before issuing payment intents. */
   paymentRailGuard: PaymentRailGuardPort;
   metricsQuery: MetricsQueryPort;
+  /** Private reliability-actuator client; absent means containment evidence fails closed. */
+  databaseContainment?: DatabaseContainmentPort;
   treasuryReadPort: TreasuryReadPort;
   /** AI telemetry DB writer - always wired */
   aiTelemetry: AiTelemetryPort;
