@@ -49,7 +49,8 @@ export interface DatabaseContainmentAuditEvent {
 
 export interface PostgresDatabaseContainmentDeps {
   readonly sql: DatabaseControlSql;
-  readonly fence: DatabaseSourceFence;
+  /** Manual secondary control; never required by the v1 autonomous actuator. */
+  readonly fence?: DatabaseSourceFence;
   readonly audit: {
     append(event: DatabaseContainmentAuditEvent): Promise<void>;
     latest(input: {
@@ -75,7 +76,7 @@ export class DatabaseContainmentConfigurationError extends Error {
 /**
  * Production construction boundary. The public app must not synthesize these
  * capabilities: its composition root may wire this only when an admin SQL
- * executor, durable audit sink, and real source-firewall actuator are present.
+ * executor and durable audit sink are present.
  */
 export function createPostgresDatabaseContainmentAdapter(
   deps: PostgresDatabaseContainmentDeps
@@ -87,12 +88,6 @@ export function createPostgresDatabaseContainmentAdapter(
     typeof deps.audit?.latest !== "function"
   ) {
     missing.push("durable_audit_sink");
-  }
-  if (
-    typeof deps.fence?.isFenced !== "function" ||
-    typeof deps.fence?.setFenced !== "function"
-  ) {
-    missing.push("source_firewall_actuator");
   }
   if (missing.length > 0) {
     throw new DatabaseContainmentConfigurationError(missing);
@@ -177,10 +172,10 @@ export class PostgresDatabaseContainmentAdapter
           "SELECT count(*) AS count FROM pg_stat_activity WHERE usename = ANY($1::text[])",
           [roles]
         ),
-        this.deps.fence.isFenced({
+        this.deps.fence?.isFenced({
           nodeSlug: input.nodeSlug,
           environment: input.environment,
-        }),
+        }) ?? Promise.resolve(false),
         input.cellId && this.deps.cells
           ? this.deps.cells.status({ cellId: input.cellId })
           : Promise.resolve(null),

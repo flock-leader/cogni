@@ -7,6 +7,7 @@ set -euo pipefail
 : "${POLY_CELL_ADMIN_DSN:?candidate dedicated-cell admin DSN required}"
 : "${SHARED_DB_DSN:?candidate shared Postgres DSN required}"
 : "${NEIGHBOR_READYZ_URLS:?comma-separated regional readyz URLs required}"
+: "${READMISSION_REGION_BASE_URLS:?exactly two regional base URLs required for human readmission}"
 : "${SHARED_IO_PSI_QUERY_URL:?Prometheus instant-query URL required}"
 : "${INCIDENT_REQUEST_RATE:?measured incident requests/second required}"
 
@@ -69,6 +70,31 @@ contained=$(psql "$POLY_CELL_ADMIN_DSN" -XAtv ON_ERROR_STOP=1 \
   -v app_role="$app_role" -v service_role="$service_role" \
   -c "SELECT count(*) = 2 AND bool_and(NOT rolcanlogin) AND NOT EXISTS (SELECT 1 FROM pg_stat_activity WHERE usename IN (:'app_role', :'service_role')) FROM pg_roles WHERE rolname IN (:'app_role', :'service_role')")
 [[ "$contained" == t ]] || { echo "contain status failed" >&2; exit 1; }
+
+# Human-only v1 readmission gate: five consecutive one-minute observations
+# from both independent regions, with every region serving this exact SHA.
+IFS=',' read -r -a readmission_regions <<<"$READMISSION_REGION_BASE_URLS"
+[[ "${#readmission_regions[@]}" == 2 ]] || {
+  echo "readmission requires exactly two regional base URLs" >&2; exit 2;
+}
+for sample in 1 2 3 4 5; do
+  sampled_at=$(date -u +%FT%TZ)
+  for base_url in "${readmission_regions[@]}"; do
+    base_url=${base_url%/}
+    code=$(curl -sS -o /dev/null --max-time 5 -w '%{http_code}' "$base_url/readyz" || true)
+    [[ "$code" == 200 ]] || { echo "readmission region unhealthy: $base_url" >&2; exit 1; }
+    observed_sha=$(curl -fsS --max-time 5 "$base_url/version" | jq -er '.buildSha')
+    [[ "$observed_sha" == "$sha" ]] || {
+      echo "readmission build SHA mismatch: $base_url expected $sha got $observed_sha" >&2; exit 1;
+    }
+    jq -cn --arg event readmission_gate_sample --arg replayId "$replay_id" \
+      --arg at "$sampled_at" --arg region "$base_url" --arg sha "$observed_sha" \
+      --argjson sample "$sample" \
+      '{event:$event,replayId:$replayId,at:$at,region:$region,buildSha:$sha,sample:$sample,healthy:true}' >>"$evidence"
+  done
+  [[ "$sample" == 5 ]] || sleep 60
+done
+
 psql "$POLY_CELL_ADMIN_DSN" -Xqv ON_ERROR_STOP=1 -v app_role="$app_role" -v service_role="$service_role" \
   -c 'ALTER ROLE :"app_role" LOGIN; ALTER ROLE :"service_role" LOGIN'
 roles_contained=0

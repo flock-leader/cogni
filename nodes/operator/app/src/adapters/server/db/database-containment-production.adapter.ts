@@ -19,9 +19,6 @@ export interface ProductionDatabaseContainmentConfig {
   readonly log: Logger;
   readonly loki: LokiReaderPort;
   readonly lokiEnvironment: string;
-  readonly cherry: ConstructorParameters<
-    typeof CherryDatabaseSourceFenceAdapter
-  >[0];
   readonly cells?: PostgresDatabaseContainmentDeps["cells"];
 }
 
@@ -44,7 +41,6 @@ export function createProductionDatabaseContainmentAdapter(
       config.loki,
       config.lokiEnvironment
     ),
-    fence: new CherryDatabaseSourceFenceAdapter(config.cherry),
     ...(config.cells ? { cells: config.cells } : {}),
   });
 }

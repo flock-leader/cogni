@@ -92,11 +92,6 @@ export const PLATFORM_SERVICE_OWNED_KEYS: ReadonlyMap<string, string> = new Map<
   ["AKASH_TX_ACTUATOR_TOKEN", "akash-tx-actuator"],
   ["DATABASE_RELIABILITY_ADMIN_URL", "database-reliability-actuator"],
   ["DATABASE_RELIABILITY_STATUS_TOKEN", "database-reliability-actuator"],
-  [
-    "DATABASE_RELIABILITY_CHERRY_BINDINGS_JSON",
-    "database-reliability-actuator",
-  ],
-  ["DATABASE_RELIABILITY_CHERRY_AUTH_TOKEN", "database-reliability-actuator"],
 ]);
 
 /**
